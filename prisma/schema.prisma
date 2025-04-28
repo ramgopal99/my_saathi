@@ -1,0 +1,155 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  phone         String?
+  location      String?
+  bio           String?
+  role          Role      @default(USER)
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model RateLimit {
+  id         String   @id @default(cuid())
+  identifier String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  type       String   @default("strict") // 'strict' or 'sliding'
+
+  @@index([identifier, expiresAt])
+  @@index([type, expiresAt])
+}
+
+enum Role {
+  USER
+  ADMIN
+  INSTRUCTOR
+} 
+
+
+// Main group (e.g., Head, Torso, Arms)
+model BoneGroup {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  description String?
+  order       Int          // For custom sorting order
+  subgroups   BoneSubgroup[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("bone_groups")
+}
+
+// Subgroup (e.g., Neck, Head, Eyes under Head group)
+model BoneSubgroup {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  groupId     String
+  group       BoneGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  bones       Bone[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([groupId, name])
+  @@map("bone_subgroups")
+}
+
+// Individual bones and their rotation limits
+model Bone {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  subgroupId  String?     // Make optional
+  subgroup    BoneSubgroup? @relation(fields: [subgroupId], references: [id], onDelete: SetNull)  // Make optional
+  
+  // Rotation limits
+  xMin        Float       @default(-180)
+  xMax        Float       @default(180)
+  yMin        Float       @default(-180)
+  yMax        Float       @default(180)
+  zMin        Float       @default(-180)
+  zMax        Float       @default(180)
+  
+  // Save current rotation state (optional)
+  currentX    Float     @default(0)
+  currentY    Float     @default(0)
+  currentZ    Float     @default(0)
+  
+  posterName  String    @default("default")
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([subgroupId, name])
+  @@map("bones")
+}
+
+// Optional: Save poses/animations
+model Pose {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  boneStates  BoneState[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+// Optional: Save bone states for poses
+model BoneState {
+  id          String    @id @default(cuid())
+  boneName    String
+  rotationX   Float     @default(0)
+  rotationY   Float     @default(0)
+  rotationZ   Float     @default(0)
+  poseId      String
+  pose        Pose      @relation(fields: [poseId], references: [id], onDelete: Cascade)
+
+  @@unique([poseId, boneName])
+}
